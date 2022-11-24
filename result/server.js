@@ -46,16 +46,74 @@ async.retry(
   }
 );
 
+let time_=1
+let time_unit="N"
+
+async.retry(
+  {times: 1000, interval: 1000},
+  function(callback) {
+    pool.connect(function(err, client, done) {
+      if (err) {
+        console.error("Waiting for db");
+      }
+      callback(err, client);
+    });
+  },
+  function(err, client) {
+    if (err) {
+      return console.error("Giving up");
+    }
+    console.log("Connected to db");
+    getVotesPeriod(client);
+  }
+);
+
+
+
 function getVotes(client) {
-  client.query('SELECT vote, COUNT(id) AS count FROM votes GROUP BY vote', [], function(err, result) {
+  let prepared_query="SELECT vote, COUNT(id) AS count FROM votes GROUP BY vote"
+  client.query(prepared_query, [], function(err, result) {
     if (err) {
       console.error("Error performing query: " + err);
     } else {
+      console.log("Query performed : "+prepared_query)
       var votes = collectVotesFromResult(result);
       io.sockets.emit("scores", JSON.stringify(votes));
     }
 
     setTimeout(function() {getVotes(client) }, 1000);
+  });
+}
+
+function getVotesPeriod(client) {
+  let prepared_query="SELECT vote, COUNT(id) AS count FROM votes";
+  switch(time_unit){
+    case 'N':
+      break
+    case 'm':
+      prepared_query+=" where vote_time > now() - interval '"+String(time_)+" minute'";
+      break
+    case 'h':
+      prepared_query+=" where vote_time > now() - interval '"+String(time_)+" hour'";
+      break
+    case 'd':
+      prepared_query+=" where vote_time > now() - interval '"+String(time_)+" day'";
+      break
+  }
+  prepared_query+=" GROUP BY vote";
+  client.query(prepared_query, [], function(err, result) {
+    if (err) {
+      console.error("Error performing query: " + err);
+    } else {
+      console.log("Query performed : "+prepared_query)
+      var votes = collectVotesFromResult(result);
+
+      votes["time_unit"]=time_unit;
+      votes["time_"]=time_;
+      io.sockets.emit("scores_period", JSON.stringify(votes));
+    }
+
+    setTimeout(function() {getVotesPeriod(client) }, 1000);
   });
 }
 
@@ -84,6 +142,16 @@ app.use(express.static(__dirname + '/views'));
 app.get('/', function (req, res) {
   res.sendFile(path.resolve(__dirname + '/views/index.html'));
 });
+
+app.get('/period',function(req,res){
+  q=req.query.q
+  time_unit=q.charAt(q.length-1);
+  q.slice(0,-1);
+  time_=parseInt(q)
+  res.sendFile(path.resolve(__dirname + '/views/period.html'));
+});
+
+
 
 server.listen(port, function () {
   var port = server.address().port;

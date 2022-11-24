@@ -5,6 +5,7 @@ import socket
 import random
 import json
 import logging
+import time
 
 option_a = os.getenv('OPTION_A', "Cats")
 option_b = os.getenv('OPTION_B', "Dogs")
@@ -23,9 +24,11 @@ def get_redis():
 
 @app.route("/", methods=['POST','GET'])
 def hello():
-    voter_id = request.cookies.get('voter_id')
-    if not voter_id:
-        voter_id = hex(random.getrandbits(64))[2:-1]
+    # voter_id = request.cookies.get('voter_id')
+    # if not voter_id:
+        # voter_id = hex(random.getrandbits(64))[2:-1]
+
+    voter_id = hex(random.getrandbits(64))[2:-1]
 
     vote = None
 
@@ -33,7 +36,7 @@ def hello():
         redis = get_redis()
         vote = request.form['vote']
         app.logger.info('Received vote for %s', vote)
-        data = json.dumps({'voter_id': voter_id, 'vote': vote})
+        data = json.dumps({'voter_id': voter_id, 'vote': vote,'vote_time':time.time()})
         redis.rpush('votes', data)
 
     resp = make_response(render_template(
@@ -43,7 +46,7 @@ def hello():
         hostname=hostname,
         vote=vote,
     ))
-    resp.set_cookie('voter_id', voter_id)
+    # resp.set_cookie('voter_id', voter_id)
     return resp
 
 
